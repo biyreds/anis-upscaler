@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Anis AI Image Upscaler</title>
+  <style>
+    body {
+      background-color: #111;
+      color: #eee;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+
+    h1 {
+      color: #00ffc8;
+    }
+
+    .container {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 30px;
+      flex-wrap: wrap;
+    }
+
+    .image-box {
+      width: 45%;
+      background: #222;
+      padding: 10px;
+      border-radius: 10px;
+    }
+
+    img {
+      width: 100%;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+
+    input, select, button {
+      margin-top: 15px;
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+    }
+
+    button {
+      background-color: #00ffc8;
+      color: black;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🖼️ Anis AI Image Upscaler</h1>
+  <p>Upload image → Choose scale → Get real upscaled image</p>
+  <input type="file" id="fileInput" accept="image/*">
+  <br>
+  <select id="scaleSelect">
+    <option value="2">2x</option>
+    <option value="4" selected>4x</option>
+    <option value="8">8x</option>
+  </select>
+  <br>
+  <button onclick="uploadAndUpscale()">Upscale Now</button>
+
+  <div class="container">
+    <div class="image-box">
+      <h3>Original Image</h3>
+      <img id="originalImage" src="" alt="Original Image">
+    </div>
+    <div class="image-box">
+      <h3>Upscaled Image</h3>
+      <img id="upscaledImage" src="" alt="Upscaled Image">
+    </div>
+  </div>
+
+  <script>
+    const originalImage = document.getElementById('originalImage');
+    const upscaledImage = document.getElementById('upscaledImage');
+    const scaleSelect = document.getElementById('scaleSelect');
+    let selectedFile;
+
+    document.getElementById('fileInput').addEventListener('change', function (event) {
+      selectedFile = event.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        originalImage.src = e.target.result;
+      };
+      reader.readAsDataURL(selectedFile);
+    });
+
+    async function uploadAndUpscale() {
+      if (!selectedFile) {
+        alert('Please select an image first.');
+        return;
+      }
+
+      const scaleValue = parseInt(scaleSelect.value);
+      const formData = new FormData();
+      formData.append('image', selectedFile);
+
+      // Upload image to imgbb temporarily
+      const imgbbApiKey = 'YOUR_IMGBB_API_KEY'; // Optional: if you have
+      const uploadRes = await fetch('https://api.imgbb.com/1/upload?key=3e2fd95d3a2e39a01382801ffb127e27', {
+        method: 'POST',
+        body: formData
+      });
+
+      const uploadData = await uploadRes.json();
+      const imageUrl = uploadData.data.url;
+
+      const response = await fetch("https://api.replicate.com/v1/predictions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Token r8_L1l803SmUr51eqOMn7JxcvnyibkeddM2Kc88M"
+        },
+        body: JSON.stringify({
+          version: "cc6a5eb2d634e85229ebda8f9e1e5d51b8a02b392d0b74c8260e0d3bb3f2ba0e",
+          input: {
+            image: imageUrl,
+            scale: scaleValue
+          }
+        })
+      });
+
+      const prediction = await response.json();
+      const predictionId = prediction.id;
+
+      let output = null;
+      while (!output) {
+        const poll = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+          headers: {
+            "Authorization": "Token r8_L1l803SmUr51eqOMn7JxcvnyibkeddM2Kc88M"
+          }
+        });
+
+        const data = await poll.json();
+        if (data.status === "succeeded") {
+          output = data.output;
+          upscaledImage.src = output;
+        } else if (data.status === "failed") {
+          alert("Upscaling failed.");
+          break;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+  </script>
+
+</body>
+</html>
